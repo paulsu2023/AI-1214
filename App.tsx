@@ -10,15 +10,16 @@ import {
 import { ImageUploader, VideoUploader } from './components/ImageUploader';
 import { Storyboard } from './components/Storyboard';
 import { AnalysisLoader } from './components/AnalysisLoader';
-import { analyzeProduct } from './services/geminiService';
+import { analyzeProduct, verifyApiKey, setCustomApiKey } from './services/geminiService';
 import { AppState, AspectRatio, VideoMode, StoryboardScene, ImageResolution } from './types';
 import { ASPECT_RATIOS, VIDEO_MODES, IMAGE_RESOLUTIONS, TARGET_MARKETS, PLATFORMS } from './constants';
 
 function App() {
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [passwordInput, setPasswordInput] = useState('');
+  const [apiKeyInput, setApiKeyInput] = useState(localStorage.getItem('gemini_api_key') || '');
   const [authError, setAuthError] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const [state, setState] = useState<AppState>({
     product: {
@@ -51,14 +52,23 @@ function App() {
   const currentPlatform = PLATFORMS.find(p => p.value === state.product.platform);
   const isDomestic = currentPlatform?.scope === 'domestic';
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordInput === 'jack') {
+    if (!apiKeyInput.trim()) return;
+
+    setIsVerifying(true);
+    setAuthError(false);
+
+    const isValid = await verifyApiKey(apiKeyInput.trim());
+    
+    if (isValid) {
+      setCustomApiKey(apiKeyInput.trim());
       setIsAuthenticated(true);
       setAuthError(false);
     } else {
       setAuthError(true);
     }
+    setIsVerifying(false);
   };
 
   const handleProductUpdate = (field: string, value: any) => {
@@ -150,30 +160,40 @@ function App() {
                  </div>
                  
                  <h1 className="text-2xl font-bold text-white mb-2 tracking-[0.2em] uppercase">创作中枢</h1>
-                 <p className="text-neon-secondary text-[10px] mb-8 tracking-[0.3em] uppercase">需要身份验证 / IDENTITY VERIFICATION</p>
+                 <p className="text-neon-secondary text-[10px] mb-8 tracking-[0.3em] uppercase">API 密钥验证 / KEY VERIFICATION</p>
 
                  <form onSubmit={handleLogin} className="w-full space-y-6">
                     <div className="relative">
                        <ShieldCheck className="absolute left-4 top-3.5 text-slate-500 w-4 h-4" />
                        <input 
                          type="password" 
-                         value={passwordInput}
-                         onChange={(e) => { setPasswordInput(e.target.value); setAuthError(false); }}
+                         value={apiKeyInput}
+                         onChange={(e) => { setApiKeyInput(e.target.value); setAuthError(false); }}
                          className={`w-full bg-void-900 border ${authError ? 'border-neon-alert text-neon-alert' : 'border-white/10 text-neon-primary'} py-3 pl-12 pr-4 outline-none focus:border-neon-primary focus:shadow-[0_0_20px_rgba(124,58,237,0.2)] transition-all placeholder-slate-600 font-mono text-sm`}
-                         placeholder="请输入访问密钥"
+                         placeholder="请输入 Gemini API Key (sk-...)"
                          autoFocus
                        />
                     </div>
                     <button 
                       type="submit"
-                      className="w-full py-3 bg-neon-primary hover:bg-neon-primary/80 text-white font-bold uppercase tracking-widest text-xs shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                      disabled={isVerifying}
+                      className="w-full py-3 bg-neon-primary hover:bg-neon-primary/80 text-white font-bold uppercase tracking-widest text-xs shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Unlock size={14} /> 解锁系统
+                      {isVerifying ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> 
+                          验证中...
+                        </>
+                      ) : (
+                        <>
+                          <Unlock size={14} /> 验证并解锁
+                        </>
+                      )}
                     </button>
                  </form>
               </div>
            </div>
-           {authError && <div className="mt-4 text-neon-alert text-xs text-center font-mono">错误: 密钥无效 / ACCESS DENIED</div>}
+           {authError && <div className="mt-4 text-neon-alert text-xs text-center font-mono">错误: API Key 无效或无法连接 / INVALID KEY</div>}
         </div>
       </div>
     );

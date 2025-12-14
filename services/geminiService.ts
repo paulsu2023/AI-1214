@@ -3,8 +3,37 @@ import { GoogleGenAI, Type, Modality, GenerateContentResponse } from "@google/ge
 import { GEMINI_MODEL_ANALYSIS, GEMINI_MODEL_IMAGE, GEMINI_MODEL_TTS, VOICE_OPTIONS, GEMINI_MODEL_ANALYSIS_FALLBACK, GEMINI_MODEL_IMAGE_FALLBACK, TARGET_MARKETS, PLATFORMS } from "../constants";
 import { ProductData, AspectRatio, ImageResolution, SceneDraft } from "../types";
 
+// --- API KEY MANAGEMENT ---
+let customApiKey: string | null = localStorage.getItem('gemini_api_key');
+
+export const setCustomApiKey = (key: string) => {
+  customApiKey = key;
+  localStorage.setItem('gemini_api_key', key);
+};
+
+export const verifyApiKey = async (key: string): Promise<boolean> => {
+  try {
+    const client = new GoogleGenAI({ apiKey: key });
+    // Use a lightweight model to verify the key
+    await client.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: { parts: [{ text: 'ping' }] }
+    });
+    return true;
+  } catch (e) {
+    console.error("API Key Verification Failed:", e);
+    return false;
+  }
+};
+
 // Helper to ensure API Key exists or guide user to select it
 const getClient = async (): Promise<GoogleGenAI> => {
+  // 1. Priority: User Custom Key
+  if (customApiKey) {
+    return new GoogleGenAI({ apiKey: customApiKey });
+  }
+
+  // 2. Fallback: AI Studio Internal Auth
   // @ts-ignore
   if (window.aistudio && window.aistudio.hasSelectedApiKey) {
     // @ts-ignore
@@ -14,6 +43,8 @@ const getClient = async (): Promise<GoogleGenAI> => {
        await window.aistudio.openSelectKey();
     }
   }
+  
+  // 3. Fallback: Env Var
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
